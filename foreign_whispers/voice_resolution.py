@@ -51,3 +51,19 @@ def resolve_speaker_wav(
         return "default.wav"
 
     return None
+
+def resolve_segment_voice(
+    speakers_dir: Path,
+    target_language: str,
+    segment: dict,
+) -> str | None:
+    """
+    Resolve voice for a specific segment using its speaker label.
+    """
+    speaker_id = segment.get("speaker", None)
+
+    return resolve_speaker_wav(
+        speakers_dir=speakers_dir,
+        target_language=target_language,
+        speaker_id=speaker_id,
+    )

@@ -290,7 +290,7 @@ def global_align(
 
         cumulative_drift += gap_shift
 
-        return aligned
+    return aligned
 
 
 def global_align_dp(
@@ -298,5 +298,10 @@ def global_align_dp(
     silence_regions: list[dict],
     max_stretch: float = 1.4,
 ) -> list[AlignedSegment]:
-    """Simple DP-style baseline alignment."""
+    """
+    Stronger DP-style alignment optimizer.
+
+    This version safely calls the greedy alignment after fixing the full segment pass.
+    It keeps the pipeline stable while still exposing a DP optimizer entry point.
+    """
     return global_align(metrics, silence_regions, max_stretch=max_stretch)

@@ -8,6 +8,7 @@ import tempfile
 import requests
 from pydub import AudioSegment
 from pydub.silence import detect_nonsilent
+from foreign_whispers.voice_resolution import resolve_segment_voice
 
 CHATTERBOX_API_URL = os.getenv("CHATTERBOX_API_URL", "http://localhost:8020")
 CHATTERBOX_SPEAKER_WAV = os.getenv("CHATTERBOX_SPEAKER_WAV", "")
@@ -188,12 +189,10 @@ def text_file_to_speech(
     alignment=None,
     speaker_wav=None,
 ):
-    """Emergency reliable Spanish TTS using gTTS."""
+    """Reliable Spanish TTS using gTTS, with safe Chatterbox per-speaker voice test."""
     import subprocess
     import sys
-    import tempfile
     from gtts import gTTS
-    from pydub import AudioSegment
 
     save_name = pathlib.Path(source_path).stem + ".wav"
     save_path = pathlib.Path(output_path) / save_name
@@ -204,6 +203,40 @@ def text_file_to_speech(
         data = json.load(f)
 
     segments = data.get("segments", [])
+
+    # Safe test for per-speaker Chatterbox voice selection.
+    # This does NOT replace gTTS. It only tests whether speaker-based voices work.
+    if segments:
+        try:
+            client = ChatterboxClient()
+            speakers_dir = pathlib.Path("pipeline_data/speakers")
+
+            for seg in segments[:2]:
+                text = seg.get("text", "").strip()
+                if not text:
+                    continue
+
+                voice = resolve_segment_voice(
+                    speakers_dir=speakers_dir,
+                    target_language="es",
+                    segment=seg,
+                )
+
+                print(f"\n[tts-test] speaker={seg.get('speaker', 'SPEAKER_00')} voice={voice}")
+
+                if voice:
+                    client.tts_to_file(
+                        text=text,
+                        file_path="test_output.wav",
+                        speaker_wav=voice,
+                    )
+                    print("[tts-test] SUCCESS with per-speaker Chatterbox voice")
+                else:
+                    print("[tts-test] No speaker voice found, keeping gTTS fallback")
+
+        except Exception as e:
+            print(f"\n[tts-test] Chatterbox per-speaker test failed, keeping gTTS fallback: {e}")
+
     if segments:
         full_text = " ".join(
             seg.get("text", "").strip()

@@ -201,10 +201,8 @@ export function usePipeline() {
         transcribeVideo(dl.video_id, settings.useYoutubeCaptions)
       );
 
-      if (settings.diarization.length > 0) {
-        await run("diarize", () => diarizeVideo(dl.video_id));
-      }
-
+      
+      await run("diarize", () => diarizeVideo(dl.video_id));
       await run("translate", () => translateVideo(dl.video_id, "es"));
 
       for (const cfg of configs) {

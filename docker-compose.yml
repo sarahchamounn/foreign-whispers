@@ -50,6 +50,8 @@ services:
       args:
         USER_UID: "${UID:-1000}"
         USER_GID: "${GID:-1000}"
+    env_file:
+      - .env
     restart: unless-stopped
     ports:
       - "8080:8080"

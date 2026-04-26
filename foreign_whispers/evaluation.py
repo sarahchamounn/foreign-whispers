@@ -58,3 +58,54 @@ def clip_evaluation_report(metrics, aligned):
         "n_translation_retries": translation_retries,
         "total_cumulative_drift_s": total_drift,
     }
+
+def full_evaluation_scorecard(metrics, aligned):
+    """
+    Creates a simple full evaluation scorecard for Assignment 4.
+    This uses the clip-level metrics and gives an overall quality label.
+    """
+    report = clip_evaluation_report(metrics, aligned)
+
+    mean_error = report["mean_abs_duration_error_s"]
+    severe_pct = report["pct_severe_stretch"]
+    drift = report["total_cumulative_drift_s"]
+    retries = report["n_translation_retries"]
+    shifts = report["n_gap_shifts"]
+
+    score = 100
+
+    if mean_error > 1.0:
+        score -= 20
+    elif mean_error > 0.5:
+        score -= 10
+
+    if severe_pct > 30:
+        score -= 20
+    elif severe_pct > 10:
+        score -= 10
+
+    if drift > 10:
+        score -= 15
+    elif drift > 5:
+        score -= 8
+
+    if retries > 3:
+        score -= 10
+
+    if shifts > 3:
+        score -= 10
+
+    score = max(score, 0)
+
+    if score >= 85:
+        quality = "Good"
+    elif score >= 70:
+        quality = "Acceptable"
+    else:
+        quality = "Needs improvement"
+
+    return {
+        **report,
+        "overall_score": score,
+        "quality_label": quality,
+    }
