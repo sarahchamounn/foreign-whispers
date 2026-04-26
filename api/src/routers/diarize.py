@@ -8,6 +8,8 @@ from api.src.core.config import settings
 from api.src.core.dependencies import resolve_title
 from api.src.schemas.diarize import DiarizeResponse, SpeakerSegment
 
+from foreign_whispers.diarization import assign_speakers
+
 router = APIRouter(prefix="/api")
 
 
@@ -34,11 +36,22 @@ async def diarize_endpoint(video_id: str):
             }
         )
 
-    settings.diarizations_dir.mkdir(parents=True, exist_ok=True)
+        settings.diarizations_dir.mkdir(parents=True, exist_ok=True)
     diarization_path = settings.diarizations_dir / f"{title}.json"
 
     with open(diarization_path, "w", encoding="utf-8") as f:
         json.dump({"segments": diarization_segments}, f, indent=2)
+
+    # Merge speaker labels into the transcription JSON
+        transcript_path = settings.transcriptions_dir / f"{title}.json"
+    if transcript_path.exists():
+        transcript = json.loads(transcript_path.read_text())
+        labeled_segments = assign_speakers(
+            transcript.get("segments", []),
+            diarization_segments,
+        )
+        transcript["segments"] = labeled_segments
+        transcript_path.write_text(json.dumps(transcript, indent=2))
 
     return DiarizeResponse(
         video_id=video_id,
