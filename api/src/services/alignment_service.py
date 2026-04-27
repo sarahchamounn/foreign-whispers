@@ -1,6 +1,6 @@
 """AlignmentService: wraps VAD, diarization, and evaluation for the FastAPI layer."""
 from foreign_whispers.diarization import diarize_audio
-from foreign_whispers.evaluation import clip_evaluation_report
+from foreign_whispers.evaluation import clip_evaluation_report, full_evaluation_scorecard
 from foreign_whispers.vad import detect_speech_activity as _detect
 
 
@@ -23,5 +23,11 @@ class AlignmentService:
         return diarize_audio(audio_path, hf_token=self._settings.hf_token or None)
 
     def evaluate_clip(self, metrics: list, aligned: list) -> dict:
-        """Return a clip evaluation report dict."""
-        return clip_evaluation_report(metrics, aligned)
+        """Return a full evaluation scorecard dict."""
+        scorecard = full_evaluation_scorecard(metrics, aligned)
+
+        print("\nREAL Evaluation Scorecard:")
+        for key, value in scorecard.items():
+            print(f"{key}: {value}")
+
+        return scorecard

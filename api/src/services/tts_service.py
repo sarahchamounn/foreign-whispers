@@ -58,6 +58,19 @@ class TTSService:
     ) -> list:
         """Run global alignment over EN and ES transcripts."""
         from foreign_whispers.alignment import compute_segment_metrics, global_align
+        from foreign_whispers.evaluation import full_evaluation_scorecard
 
         metrics = compute_segment_metrics(en_transcript, es_transcript)
-        return global_align(metrics, silence_regions, max_stretch)
+        aligned = global_align(metrics, silence_regions, max_stretch)
+
+        
+        try:
+            scorecard = full_evaluation_scorecard(metrics, aligned)
+
+            print("\n=== REAL ALIGNMENT SCORECARD ===")
+            for key, value in scorecard.items():
+                print(f"{key}: {value}")
+        except Exception as e:
+            print("Scorecard failed:", e)
+
+        return aligned

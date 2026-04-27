@@ -211,7 +211,7 @@ export function usePipeline() {
           variantId: makeVariantId(video.id, cfg.id),
         });
 
-        const alignment = cfg.dubbing === "aligned";
+        const alignment = true;
         await run("tts", () => synthesizeSpeech(dl.video_id, cfg.id, alignment));
         await run("stitch", () => stitchVideo(dl.video_id, cfg.id));
       }
