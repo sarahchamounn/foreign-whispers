@@ -1,142 +1,185 @@
-Foreign Whispers
+# Foreign Whispers
 
 Foreign Whispers is an end-to-end dubbing pipeline that takes an input video, transcribes the speech, translates it into a target language, aligns the translated text with the original timing, and generates a synchronized dubbed output.
 
 The system is designed as a fully functional, reproducible application that can be deployed locally using Docker and accessed through a browser interface.
 
 
-
-Project Overview
+# Project Overview
 
 This application performs a complete speech-to-speech pipeline:
 
-- Transcribes speech from an input video
-- Translates text into a target language
-- Aligns translated segments with original timing
-- Applies timing corrections using cumulative drift
-- Generates speech using text-to-speech (TTS)
-- Produces a final dubbed output video
+* Transcribes speech from an input video
+* Translates text into a target language
+* Aligns translated segments with original timing
+* Applies timing corrections using cumulative drift
+* Generates speech at the segment level using TTS
+* Produces a final dubbed output video
 
 The frontend allows users to run the pipeline and view results directly in the browser.
 
 
-
-System Architecture
+# System Architecture
 
 The project is organized into the following components:
 
-Backend (`api/`)
-- Handles all processing logic
-- Exposes API endpoints for the pipeline
-- Coordinates transcription, translation, alignment, and TTS
+### Backend (`api/`)
 
-Core Pipeline (`foreign_whispers/`)
-- Alignment logic (timing + drift correction)
-- Speaker diarization
-- Evaluation metrics and scorecard
-- Voice resolution for speaker-based TTS
+* Handles all processing logic
+* Exposes API endpoints for the pipeline
+* Coordinates transcription, translation, alignment, and TTS
 
-Frontend (`frontend/`)
-- Browser interface for selecting videos
-- Triggers the pipeline
-- Displays results
+### Core Pipeline (`foreign_whispers/`)
 
+* Alignment logic (timing + drift correction)
+* Speaker diarization
+* Evaluation metrics and scorecard
+* Voice resolution for speaker-based TTS
 
+### Frontend (`frontend/`)
 
-Key Features
-
-- End-to-end speech translation pipeline
-- Timing-aware alignment with cumulative drift correction
-- Segment-level processing for flexibility
-- Evaluation scorecard for alignment quality
-- gTTS-based speech generation (stable)
-- Optional per-speaker TTS using Chatterbox
-- Docker-based reproducible deployment
+* Browser interface for selecting videos
+* Triggers the pipeline
+* Displays results
 
 
 
-Text-to-Speech Design
+# Key Features
 
-The system uses **gTTS** as the primary TTS method because it is stable and reliable.
+* End-to-end speech translation pipeline
+* Timing-aware alignment with cumulative drift correction
+* Segment-level processing for accurate synchronization
+* Speaker-aware text-to-speech (per segment)
+* Evaluation scorecard for alignment quality
+* Docker-based reproducible deployment
 
-An advanced **Chatterbox-based per-speaker TTS system** was implemented to support voice selection based on speaker labels. However, since it depends on external services and voice files, it is used as an optional feature.
 
-If speaker-based TTS is unavailable, the system automatically falls back to gTTS to ensure consistent output.
+# Text-to-Speech Design
+
+The system generates speech at the **segment level** using a speaker-conditioned approach.
+
+Each translated segment is processed independently using a Chatterbox-based TTS model. The model takes:
+
+* Translated text
+* A reference WAV file representing the speaker
+
+and generates audio for each segment.
+
+Speaker labels are assigned using diarization, and each segment is mapped to a corresponding voice profile. This allows the system to support **multi-speaker audio generation** instead of a single voice for the entire output.
+
+In cases where diarization detects only one speaker, the system uses a fallback strategy that alternates speakers across segments to ensure that speaker-conditioned synthesis is still demonstrated.
+
+While voice differences may be subtle due to model limitations, the system correctly applies speaker-specific voice conditioning at the segment level.
 
 
 
-Alignment and Evaluation
+# Alignment and Evaluation
 
 The alignment module compares original segment timing with predicted translated speech timing.
 
 It computes:
-- Duration error
-- Stretch factor
-- Gap shifts
-- Cumulative drift
 
-A global alignment step ensures timing adjustments are propagated across segments.
+* Duration error
+* Stretch factor
+* Gap shifts
+* Cumulative drift
+
+A global alignment step ensures timing adjustments are applied across all segments.
 
 An evaluation scorecard reports:
-- Mean duration error
-- Severe stretch percentage
-- Gap shifts
-- Translation retries
-- Total drift
-- Overall quality score
+
+* Mean duration error
+* Severe stretch percentage
+* Gap shifts
+* Translation retries
+* Total drift
+* Overall quality score
 
 
 
-Limitations
+# Limitations
 
 Some repeated words or short phrases may appear in the translated output. This occurs because the pipeline processes speech in segments, and adjacent segments may contain overlapping content.
 
-Minor timing mismatches may also occur when translated speech differs significantly from the original duration.
+Minor timing mismatches may occur when translated speech differs significantly from the original duration.
+
+Voice differences between speakers may be subtle. This is due to limitations of the TTS model, especially when using short reference samples or running on CPU.
 
 These limitations are common in segment-based speech translation systems.
 
 
 
-How to Run the Application
+# How to Run the Application
 
-1. Clone the Repository
+## 1. Clone the Repository
 
 ```bash
 git clone https://github.com/sarahchamounn/foreign-whispers.git
 cd foreign-whispers
+```
 
-2. Create Environment File
 
-cp .env.example .env <bash>
-FW_HF_TOKEN=your_token_here <bash>
 
-3. Start the Application
-<bash> docker compose --profile cpu down
+## 2. Create Environment File
+
+```bash
+cp .env.example .env
+```
+
+Add your token:
+
+```bash
+FW_HF_TOKEN=your_token_here
+```
+
+
+
+## 3. Start the Application
+
+```bash
+docker compose --profile cpu down
 docker compose --profile cpu up --build -d
+```
 
 You should see:
 
-frontend (port 8501)
-backend API (port 8080)
-TTS service (port 8020)
+* frontend (port 8501)
+* backend API (port 8080)
+* TTS service (port 8020)
 
 
-Frontend - http://localhost:8501
-Backend API - http://localhost:8080
-Chatterbox TTS - http://localhost:8020
 
-6. View Logs (if needed)
-<bash> docker compose --profile cpu logs -f
+## 4. Access the Application
+
+Frontend: http://localhost:8501
+Backend API: http://localhost:8080
+Chatterbox TTS: http://localhost:8020
+
+
+
+## 5. View Logs (if needed)
+
+```bash
+docker compose --profile cpu logs -f api
+```
+
+
+
+# Demo Links
 
 Screen Recording:
-https://www.youtube.com/watch?v=Scyq-rlLNYQ 
+https://www.youtube.com/watch?v=yBT-nc46ONo
 
 Sample Input Video:
 https://www.youtube.com/watch?v=uOX2Qp16FfY&t=9s
 
 Sample Output Video:
-https://www.youtube.com/watch?v=QqMAU0FMfl4
+https://www.youtube.com/watch?v=xU4qzKuuPo4
 
-This project demonstrates a complete and reproducible AI pipeline that integrates transcription, translation, alignment, and speech generation into a single system.
 
-The pipeline prioritizes stability using gTTS while supporting advanced features such as speaker-based voice selection for future improvements.
+
+# Summary
+
+This project demonstrates a complete and reproducible AI pipeline that integrates transcription, translation, alignment, and speaker-aware speech generation into a single system.
+
+The pipeline focuses on segment-level processing and speaker-conditioned synthesis to preserve timing and speaker structure, while maintaining reliability and reproducibility through Docker deployment.
