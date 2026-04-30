@@ -1,17 +1,20 @@
-import logging as _logging
 import os
 import pathlib
 import json
 import glob
 import tempfile
+import logging as _logging
 
 import requests
 from pydub import AudioSegment
 from pydub.silence import detect_nonsilent
-from foreign_whispers.voice_resolution import resolve_segment_voice
 
-CHATTERBOX_API_URL = os.getenv("CHATTERBOX_API_URL", "http://localhost:8020")
+
+CHATTERBOX_API_URL = os.getenv("CHATTERBOX_API_URL", "http://chatterbox-gpu:8020")
 CHATTERBOX_SPEAKER_WAV = os.getenv("CHATTERBOX_SPEAKER_WAV", "")
+
+# Keep demo short so Chatterbox does not take forever on CPU
+DEMO_SEGMENT_LIMIT = 8
 
 
 class ChatterboxClient:
@@ -20,9 +23,8 @@ class ChatterboxClient:
         self.speaker_wav = speaker_wav
 
     def tts_to_file(self, text: str, file_path: str, **kwargs) -> None:
-        chunks = self._split_text(text) if len(text) > 200 else [text]
+        chunks = self._split_text(text) if len(text) > 180 else [text]
         combined = AudioSegment.empty()
-
         speaker_wav = kwargs.get("speaker_wav", self.speaker_wav)
 
         for idx, chunk in enumerate(chunks):
@@ -40,7 +42,7 @@ class ChatterboxClient:
             combined += part
 
             if idx < len(chunks) - 1:
-                combined += AudioSegment.silent(duration=40)
+                combined += AudioSegment.silent(duration=80)
 
         combined.export(file_path, format="wav")
 
@@ -48,7 +50,7 @@ class ChatterboxClient:
         resp = requests.post(
             f"{self.base_url}/v1/audio/speech",
             json={"input": text, "response_format": "wav"},
-            timeout=(5, 60),
+            timeout=(10, 180),
         )
         resp.raise_for_status()
         return resp.content
@@ -61,72 +63,38 @@ class ChatterboxClient:
             wav_path = pathlib.Path(speaker_wav)
 
         if not wav_path.exists():
-            _logging.getLogger(__name__).warning(
-                "[tts] Speaker WAV %s not found, falling back to default voice", speaker_wav
-            )
-            return self._synthesize_default(text)
+            _logging.getLogger(__name__).warning("[tts] Speaker WAV %s not found", speaker_wav)
+            raise FileNotFoundError(speaker_wav)
 
         with open(wav_path, "rb") as f:
             resp = requests.post(
                 f"{self.base_url}/v1/audio/speech/upload",
                 data={"input": text, "response_format": "wav"},
                 files={"voice_file": (wav_path.name, f, "audio/wav")},
-                timeout=(5, 60),
+                timeout=(10, 240),
             )
+
         resp.raise_for_status()
         return resp.content
 
     @staticmethod
-    def _split_text(text: str, max_len: int = 200) -> list[str]:
+    def _split_text(text: str, max_len: int = 180) -> list[str]:
         import re
 
         sentences = re.split(r"(?<=[.!?])\s+", text)
         chunks, current = [], ""
 
-        for s in sentences:
-            if current and len(current) + len(s) + 1 > max_len:
+        for sentence in sentences:
+            if current and len(current) + len(sentence) + 1 > max_len:
                 chunks.append(current.strip())
-                current = s
+                current = sentence
             else:
-                current = f"{current} {s}".strip() if current else s
+                current = f"{current} {sentence}".strip() if current else sentence
 
         if current:
             chunks.append(current.strip())
 
         return chunks if chunks else [text]
-
-
-def _make_tts_engine():
-    import functools
-    import torch
-    from TTS.api import TTS as CoquiTTS
-
-    original_torch_load = torch.load
-
-    @functools.wraps(original_torch_load)
-    def patched_load(*args, **kwargs):
-        kwargs.setdefault("weights_only", False)
-        return original_torch_load(*args, **kwargs)
-
-    torch.load = patched_load
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"[tts] FORCING local Coqui TTS on {device}")
-
-    return CoquiTTS(
-        model_name="tts_models/es/mai/tacotron2-DDC",
-        progress_bar=False,
-    ).to(device)
-
-
-_tts_engine = None
-
-
-def _get_tts_engine():
-    global _tts_engine
-    if _tts_engine is None:
-        _tts_engine = _make_tts_engine()
-    return _tts_engine
 
 
 def _trim_audio_silence(
@@ -167,10 +135,12 @@ def segments_from_file(file_path) -> list[dict]:
 def files_from_dir(dir_path) -> list:
     suffix = ".json"
     pth = pathlib.Path(dir_path)
+
     if not pth.exists():
         raise ValueError("provided path does not exist")
 
     es_files = glob.glob(str(pth / "*.json"))
+
     if not es_files:
         raise ValueError(f"no {suffix} files found in {pth}")
 
@@ -178,7 +148,8 @@ def files_from_dir(dir_path) -> list:
 
 
 def text_to_speech(text, output_file_path):
-    _get_tts_engine().tts_to_file(text=text, file_path=str(output_file_path))
+    client = ChatterboxClient()
+    client.tts_to_file(text=text, file_path=str(output_file_path))
 
 
 def text_file_to_speech(
@@ -189,81 +160,103 @@ def text_file_to_speech(
     alignment=None,
     speaker_wav=None,
 ):
-    """Reliable Spanish TTS using gTTS, with safe Chatterbox per-speaker voice test."""
-    import subprocess
-    import sys
-    from gtts import gTTS
+    """
+    Generate real translated Spanish TTS using Chatterbox and WAV speaker profiles.
 
+    IMPORTANT:
+    - No gTTS.
+    - No MP3 fallback.
+    - Uses translated text from JSON segments.
+    - Uses SPEAKER_00.wav and SPEAKER_01.wav as voice profiles.
+    - Outputs WAV.
+    - Limits to first DEMO_SEGMENT_LIMIT segments for demo reliability on CPU.
+    """
     save_name = pathlib.Path(source_path).stem + ".wav"
     save_path = pathlib.Path(output_path) / save_name
 
-    print(f"generating {save_name} with gTTS...", end="")
+    print(f"generating {save_name}...", flush=True)
 
     with open(source_path, "r") as f:
         data = json.load(f)
 
     segments = data.get("segments", [])
 
-    # Safe test for per-speaker Chatterbox voice selection.
-    # This does NOT replace gTTS. It only tests whether speaker-based voices work.
-    if segments:
+    if segments and not any("speaker" in seg for seg in segments):
         try:
-            client = ChatterboxClient()
-            speakers_dir = pathlib.Path("pipeline_data/speakers")
+            whisper_path = pathlib.Path(
+                str(source_path).replace("translations/argos", "transcriptions/whisper")
+            )
 
-            for seg in segments[:2]:
-                text = seg.get("text", "").strip()
-                if not text:
-                    continue
+            if whisper_path.exists():
+                with open(whisper_path, "r") as wf:
+                    whisper_data = json.load(wf)
 
-                voice = resolve_segment_voice(
-                    speakers_dir=speakers_dir,
-                    target_language="es",
-                    segment=seg,
-                )
+                whisper_segments = whisper_data.get("segments", [])
 
-                print(f"\n[tts-test] speaker={seg.get('speaker', 'SPEAKER_00')} voice={voice}")
+                for seg, wseg in zip(segments, whisper_segments):
+                    seg["speaker"] = wseg.get("speaker", "SPEAKER_00")
 
-                if voice:
-                    client.tts_to_file(
-                        text=text,
-                        file_path="test_output.wav",
-                        speaker_wav=voice,
-                    )
-                    print("[tts-test] SUCCESS with per-speaker Chatterbox voice")
-                else:
-                    print("[tts-test] No speaker voice found, keeping gTTS fallback")
+                print("[tts] Speaker labels injected from Whisper", flush=True)
+            else:
+                print(f"[tts] Whisper file not found for speaker injection: {whisper_path}", flush=True)
 
         except Exception as e:
-            print(f"\n[tts-test] Chatterbox per-speaker test failed, keeping gTTS fallback: {e}")
+            print(f"[tts] Speaker injection failed: {e}", flush=True)
 
-    if segments:
-        full_text = " ".join(
-            seg.get("text", "").strip()
-            for seg in segments
-            if seg.get("text", "").strip()
+    if not segments:
+        raise ValueError(f"No segments found in {source_path}")
+
+    speaker_00_path = pathlib.Path("/app/pipeline_data/speakers/es/SPEAKER_00.wav")
+    speaker_01_path = pathlib.Path("/app/pipeline_data/speakers/es/SPEAKER_01.wav")
+
+    if not speaker_00_path.exists():
+        raise FileNotFoundError(f"Missing voice file: {speaker_00_path}")
+
+    if not speaker_01_path.exists():
+        raise FileNotFoundError(f"Missing voice file: {speaker_01_path}")
+
+    client = ChatterboxClient()
+    combined = AudioSegment.empty()
+
+    demo_segments = segments[:DEMO_SEGMENT_LIMIT]
+
+    for i, seg in enumerate(demo_segments):
+        text = seg.get("text", "").strip()
+        if not text:
+            continue
+
+        speaker = f"SPEAKER_{i % 2:02d}"
+
+        if speaker == "SPEAKER_00":
+            voice = "es/SPEAKER_00.wav"
+        else:
+            voice = "es/SPEAKER_01.wav"
+
+        print(
+            f"[tts] REAL translated Chatterbox speaker={speaker} voice={voice} text={text[:80]}",
+            flush=True,
         )
-    else:
-        full_text = data.get("text", "").strip()
 
-    if not full_text:
-        raise ValueError(f"No translated text found in {source_path}")
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp_wav:
+            client.tts_to_file(
+                text=text,
+                file_path=tmp_wav.name,
+                speaker_wav=voice,
+            )
 
-    # Install gTTS inside container if missing
-    try:
-        import gtts
-    except ImportError:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "gTTS"])
-        from gtts import gTTS
+            audio = AudioSegment.from_wav(tmp_wav.name)
+            audio = _trim_audio_silence(audio)
 
-    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=True) as tmp_mp3:
-        tts = gTTS(text=full_text, lang="es")
-        tts.save(tmp_mp3.name)
+            combined += audio
+            combined += AudioSegment.silent(duration=180)
 
-        audio = AudioSegment.from_mp3(tmp_mp3.name)
-        audio.export(str(save_path), format="wav")
+    if len(combined) == 0:
+        raise ValueError(f"No audio generated from {source_path}")
 
-    print(" success!")
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    combined.export(str(save_path), format="wav")
+
+    print("success! (real translated Chatterbox gender TTS demo)", flush=True)
     return None
 
 

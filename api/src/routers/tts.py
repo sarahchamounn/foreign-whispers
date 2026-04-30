@@ -11,7 +11,6 @@ from fastapi.responses import FileResponse
 from api.src.core.config import settings
 from api.src.core.dependencies import resolve_title
 from api.src.services.tts_service import TTSService
-from foreign_whispers.voice_resolution import resolve_speaker_wav
 
 router = APIRouter(prefix="/api")
 
@@ -54,22 +53,10 @@ async def tts_endpoint(
     wav_path = audio_dir / f"{title}.wav"
 
     if wav_path.exists():
-        return {
-            "video_id": video_id,
-            "audio_path": str(wav_path),
-            "config": config,
-            "speaker_wav": speaker_wav,
-        }
+        print(f"[tts] Removing cached audio so TTS regenerates: {wav_path}", flush=True)
+        wav_path.unlink()
 
     source_path = str(trans_dir / f"{title}.json")
-
-    # If the caller did not provide a speaker_wav, resolve a default one.
-    if speaker_wav is None:
-        speaker_wav = resolve_speaker_wav(
-            settings.speakers_dir,
-            target_language="es",
-            speaker_id=None,
-        )
 
     await _run_in_threadpool(
         None,

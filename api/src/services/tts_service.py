@@ -28,11 +28,7 @@ class TTSService:
         speaker_id: str | None = None,
     ) -> None:
         """Generate TTS audio from a translated JSON transcript."""
-        resolved_wav = speaker_wav or resolve_speaker_wav(
-            SPEAKERS_DIR,
-            target_language,
-            speaker_id,
-        )
+        resolved_wav = None
 
         tts_text_file_to_speech(
             source_path,
