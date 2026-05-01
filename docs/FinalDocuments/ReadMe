@@ -110,6 +110,8 @@ These limitations are common in segment-based speech translation systems.
 
 Stitching depends on the generated audio length matching the video timing. If the translated audio is shorter or longer than expected, small sync differences may occur.
 
+The system can use pyannote for speaker detection, but in this run it used Whisper instead. I kept this backup method so the pipeline still works even if speaker detection is not perfect.
+
 
 
 # How to Run the Application
