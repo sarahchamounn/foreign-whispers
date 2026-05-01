@@ -176,6 +176,13 @@ https://www.youtube.com/watch?v=uOX2Qp16FfY&t=9s
 Sample Output Video:
 https://www.youtube.com/watch?v=xU4qzKuuPo4
 
+#Stitching 
+The stitching stage combines the original video with the generated translated audio. After TTS creates the final WAV file, the system uses ffmpeg/moviepy to attach the new audio track to the video and produce a dubbed MP4 output. This step is important because the pipeline is not complete until the translated audio is synchronized with the original video.
+The stitching step takes the original video file and replaces or overlays the audio with the generated translated speech. The output is saved as a final dubbed video in the dubbed_videos folder. This allows the user to view the translated result directly in the browser.
+During testing, the stitching endpoint completed successfully after the TTS stage. The logs showed that the POST request to the stitch endpoint returned 200 OK, which confirms that the generated audio was successfully combined with the video.
+
+
+#WAV files - 
 
 
 # Summary
