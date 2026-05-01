@@ -52,6 +52,7 @@ The project is organized into the following components:
 * Speaker-aware text-to-speech (per segment)
 * Evaluation scorecard for alignment quality
 * Docker-based reproducible deployment
+* Stitches translated WAV audio back onto the original video to generate a final dubbed MP4
 
 
 # Text-to-Speech Design
@@ -106,6 +107,8 @@ Minor timing mismatches may occur when translated speech differs significantly f
 Voice differences between speakers may be subtle. This is due to limitations of the TTS model, especially when using short reference samples or running on CPU.
 
 These limitations are common in segment-based speech translation systems.
+
+Stitching depends on the generated audio length matching the video timing. If the translated audio is shorter or longer than expected, small sync differences may occur.
 
 
 
@@ -180,9 +183,10 @@ https://www.youtube.com/watch?v=xU4qzKuuPo4
 The stitching stage combines the original video with the generated translated audio. After TTS creates the final WAV file, the system uses ffmpeg/moviepy to attach the new audio track to the video and produce a dubbed MP4 output. This step is important because the pipeline is not complete until the translated audio is synchronized with the original video.
 The stitching step takes the original video file and replaces or overlays the audio with the generated translated speech. The output is saved as a final dubbed video in the dubbed_videos folder. This allows the user to view the translated result directly in the browser.
 During testing, the stitching endpoint completed successfully after the TTS stage. The logs showed that the POST request to the stitch endpoint returned 200 OK, which confirms that the generated audio was successfully combined with the video.
+POST /api/stitch/GYQ5yGV_-Oc?config=c-fb1074a HTTP/1.1" 200 OK
 
-
-#WAV files - 
+#WAV files for feminine voice and male voice - 
+https://github.com/sarahchamounn/foreign-whispers/tree/main/pipeline_data/speakers/es 
 
 
 # Summary
