@@ -58,30 +58,38 @@ if _im_bin:
 
 
 def stitch_audio(video_path: str, audio_path: str, output_path: str):
-    """Replace video audio track with the dubbed audio using ffmpeg remux.
+    """Replace video audio track with the dubbed audio using ffmpeg remux."""
 
-    Uses -c:v copy to avoid re-encoding video frames — instant and lossless.
-    """
+    from pathlib import Path
     import subprocess
 
-    print("Stitching audio (ffmpeg remux)...")
-    pathlib.Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    print("Stitching audio (ffmpeg remux)...", flush=True)
+    print(f"[stitch] input_video={video_path}", flush=True)
+    print(f"[stitch] input_audio={audio_path}", flush=True)
+    print(f"[stitch] output_video={output_path}", flush=True)
 
     cmd = [
         "ffmpeg", "-y",
         "-i", video_path,
         "-i", audio_path,
-        "-c:v", "copy",        # copy video stream without re-encoding
-        "-map", "0:v:0",       # take video from first input
-        "-map", "1:a:0",       # take audio from second input
-        "-shortest",           # stop when shortest stream ends
+        "-map", "0:v:0",
+        "-map", "1:a:0",
+        "-c:v", "copy",
+        "-c:a", "aac",
+        "-shortest",
         output_path,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"ffmpeg failed: {result.stderr}")
-    print("Stitching done.")
 
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    if result.returncode != 0:
+        print(f"[stitch] ffmpeg stderr={result.stderr}", flush=True)
+        raise RuntimeError(f"ffmpeg failed: {result.stderr}")
+
+    print(
+        f"[stitch] success output_exists={Path(output_path).exists()} output={output_path}",
+        flush=True,
+    )
 
 # not needed as our converted foramat is already in seconds, but keeping this to generalise for any data
 def parse_srt_time(srt_time):
