@@ -225,7 +225,7 @@ def text_file_to_speech(
         if not text:
             continue
 
-        speaker = f"SPEAKER_{i % 2:02d}"
+        speaker = seg.get("speaker","SPEAKER_00")
 
         if speaker == "SPEAKER_00":
             voice = "es/SPEAKER_00.wav"
